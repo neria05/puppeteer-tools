@@ -5,7 +5,6 @@ const bodyParser = require('body-parser');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// הגדר מגבלת גודל גוף הבקשה
 app.use(bodyParser.json({ limit: '10mb' }));
 
 app.post('/generate-image', async (req, res) => {
@@ -16,34 +15,40 @@ app.post('/generate-image', async (req, res) => {
   }
 
   try {
-    // הפעלת Puppeteer עם הגדרות למניעת בעיות
     const browser = await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 
     const page = await browser.newPage();
 
-    // הגדרת התוכן של הדף
-    await page.setContent(html, { waitUntil: 'domcontentloaded' });
+    // הגדרת גודל התצוגה
+    await page.setViewport({
+      width: 1920,
+      height: 1080,
+      deviceScaleFactor: 1,
+    });
 
-    // צילום מסך בפורמט PNG
+    // ניהול שגיאות בקונסול הדף
+    page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+    // טעינת התוכן עם המתנה למשאבים
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    // בדיקת בעיות בקוד
+    const content = await page.content();
+    console.log('Page Content Loaded:', content);
+
+    // צילום מסך של הדף
     const screenshot = await page.screenshot({ type: 'png', fullPage: true });
 
-    // סגירת הדפדפן
     await browser.close();
 
-    // הגדרת סוג התוכן בתגובה
     res.set({
       'Content-Type': 'image/png',
       'Content-Disposition': 'inline; filename="screenshot.png"',
     });
 
-    // שליחת התמונה כתגובה
     res.end(screenshot, 'binary');
   } catch (error) {
     console.error('Error generating image:', error);
@@ -54,7 +59,6 @@ app.post('/generate-image', async (req, res) => {
   }
 });
 
-// הפעלת השרת
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
