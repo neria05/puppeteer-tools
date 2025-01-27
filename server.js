@@ -8,10 +8,10 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json({ limit: '10mb' }));
 
 app.post('/generate-image', async (req, res) => {
-  const { html } = req.body;
+  const { html, url } = req.body;
 
-  if (!html) {
-    return res.status(400).send({ error: 'HTML content is required' });
+  if (!html && !url) {
+    return res.status(400).send({ error: 'Either HTML content or a URL is required' });
   }
 
   try {
@@ -22,20 +22,27 @@ app.post('/generate-image', async (req, res) => {
 
     const page = await browser.newPage();
 
-    // הגדרת גודל התצוגה
+    // הגדרת רזולוציה מותאמת לקופון (לדוגמה, A4 בגודל DPI גבוה)
+    const width = 1200; // רוחב הקופון בפיקסלים
+    const height = 2000; // גובה הקופון בפיקסלים
     await page.setViewport({
-      width: 1920,
-      height: 1080,
-      deviceScaleFactor: 1,
+      width,
+      height,
+      deviceScaleFactor: 2, // DPI גבוה לתמונה חדה
     });
 
     // ניהול שגיאות בקונסול הדף
     page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
 
-    // טעינת התוכן עם המתנה למשאבים
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    if (html) {
+      // טעינת תוכן HTML
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+    } else if (url) {
+      // טעינת כתובת URL
+      await page.goto(url, { waitUntil: 'networkidle0' });
+    }
 
-    // בדיקת בעיות בקוד
+    // בדיקת תוכן הדף (לא חובה, אך עוזר לדיבאגינג)
     const content = await page.content();
     console.log('Page Content Loaded:', content);
 
@@ -46,7 +53,7 @@ app.post('/generate-image', async (req, res) => {
 
     res.set({
       'Content-Type': 'image/png',
-      'Content-Disposition': 'inline; filename="screenshot.png"',
+      'Content-Disposition': 'inline; filename="coupon.png"',
     });
 
     res.end(screenshot, 'binary');
