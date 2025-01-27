@@ -21,7 +21,7 @@ app.post('/generate-image', async (req, res) => {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--font-render-hinting=none' // לשיפור חדות הטקסט
+        '--font-render-hinting=none'
       ],
     });
 
@@ -29,9 +29,9 @@ app.post('/generate-image', async (req, res) => {
 
     // הגדרת רזולוציה אופטימלית לקופון
     await page.setViewport({
-      width: 500, // רוחב הקופון שהגדרנו ב-HTML
-      height: 800, // גובה התחלתי, יתעדכן אוטומטית
-      deviceScaleFactor: 2, // רזולוציה כפולה לתצוגה חדה
+      width: 500,
+      height: 800,
+      deviceScaleFactor: 2,
       isMobile: false,
     });
 
@@ -63,10 +63,9 @@ app.post('/generate-image', async (req, res) => {
     // צילום מסך רק של אזור הקופון
     const screenshot = await element.screenshot({
       type: 'png',
-      omitBackground: true, // רקע שקוף
+      omitBackground: true,
       encoding: 'binary',
-      quality: 100,
-      optimizeForSpeed: false, // איכות מקסימלית
+      optimizeForSpeed: false,
       clip: {
         x: boundingBox.x,
         y: boundingBox.y,
@@ -77,7 +76,7 @@ app.post('/generate-image', async (req, res) => {
 
     await browser.close();
 
-    // הגדרת headers לתמונה איכותית
+    // הגדרת headers לתמונה
     res.set({
       'Content-Type': 'image/png',
       'Content-Disposition': 'inline; filename="coupon.png"',
@@ -95,7 +94,6 @@ app.post('/generate-image', async (req, res) => {
   }
 });
 
-// תוספת של endpoint לבדיקת תקינות השרת
 app.get('/health', (req, res) => {
   res.status(200).send({ status: 'ok' });
 });
