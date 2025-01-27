@@ -17,43 +17,72 @@ app.post('/generate-image', async (req, res) => {
   try {
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--font-render-hinting=none' // לשיפור חדות הטקסט
+      ],
     });
 
     const page = await browser.newPage();
 
-    // הגדרת רזולוציה מותאמת לקופון (לדוגמה, A4 בגודל DPI גבוה)
-    const width = 1200; // רוחב הקופון בפיקסלים
-    const height = 2000; // גובה הקופון בפיקסלים
+    // הגדרת רזולוציה אופטימלית לקופון
     await page.setViewport({
-      width,
-      height,
-      deviceScaleFactor: 2, // DPI גבוה לתמונה חדה
+      width: 500, // רוחב הקופון שהגדרנו ב-HTML
+      height: 800, // גובה התחלתי, יתעדכן אוטומטית
+      deviceScaleFactor: 2, // רזולוציה כפולה לתצוגה חדה
+      isMobile: false,
     });
 
-    // ניהול שגיאות בקונסול הדף
-    page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+    // הגדרת פונטים ורנדור איכותי
+    await page.evaluateOnNewDocument(() => {
+      document.body.style.webkitFontSmoothing = 'antialiased';
+      document.body.style.mozOsxFontSmoothing = 'grayscale';
+    });
 
     if (html) {
-      // טעינת תוכן HTML
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      await page.setContent(html, {
+        waitUntil: 'networkidle0',
+        timeout: 30000,
+      });
     } else if (url) {
-      // טעינת כתובת URL
-      await page.goto(url, { waitUntil: 'networkidle0' });
+      await page.goto(url, {
+        waitUntil: 'networkidle0',
+        timeout: 30000,
+      });
     }
 
-    // בדיקת תוכן הדף (לא חובה, אך עוזר לדיבאגינג)
-    const content = await page.content();
-    console.log('Page Content Loaded:', content);
+    // חכה שהקונטיינר של הקופון יטען
+    await page.waitForSelector('.container');
 
-    // צילום מסך של הדף
-    const screenshot = await page.screenshot({ type: 'png', fullPage: true });
+    // קבל את המידות המדויקות של הקופון
+    const element = await page.$('.container');
+    const boundingBox = await element.boundingBox();
+
+    // צילום מסך רק של אזור הקופון
+    const screenshot = await element.screenshot({
+      type: 'png',
+      omitBackground: true, // רקע שקוף
+      encoding: 'binary',
+      quality: 100,
+      optimizeForSpeed: false, // איכות מקסימלית
+      clip: {
+        x: boundingBox.x,
+        y: boundingBox.y,
+        width: boundingBox.width,
+        height: boundingBox.height
+      }
+    });
 
     await browser.close();
 
+    // הגדרת headers לתמונה איכותית
     res.set({
       'Content-Type': 'image/png',
       'Content-Disposition': 'inline; filename="coupon.png"',
+      'Cache-Control': 'no-cache',
+      'X-Content-Type-Options': 'nosniff'
     });
 
     res.end(screenshot, 'binary');
@@ -66,6 +95,11 @@ app.post('/generate-image', async (req, res) => {
   }
 });
 
+// תוספת של endpoint לבדיקת תקינות השרת
+app.get('/health', (req, res) => {
+  res.status(200).send({ status: 'ok' });
+});
+
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Screenshot server running on http://localhost:${PORT}`);
 });
