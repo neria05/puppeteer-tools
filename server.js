@@ -1,7 +1,6 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
 const bodyParser = require('body-parser');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -9,7 +8,7 @@ app.use(bodyParser.json({ limit: '10mb' }));
 
 app.post('/generate-image', async (req, res) => {
   const { html, url } = req.body;
-
+  
   if (!html && !url) {
     return res.status(400).send({ error: 'Either HTML content or a URL is required' });
   }
@@ -26,16 +25,16 @@ app.post('/generate-image', async (req, res) => {
     });
 
     const page = await browser.newPage();
-
-    // הגדרת רזולוציה אופטימלית לקופון
+    
+    // Set initial viewport size
     await page.setViewport({
-      width: 500,
-      height: 800,
+      width: 540, // Slightly larger than container width to account for margins
+      height: 1000, // Initial height, will be adjusted
       deviceScaleFactor: 2,
       isMobile: false,
     });
 
-    // הגדרת פונטים ורנדור איכותי
+    // Add font smoothing
     await page.evaluateOnNewDocument(() => {
       document.body.style.webkitFontSmoothing = 'antialiased';
       document.body.style.mozOsxFontSmoothing = 'grayscale';
@@ -53,43 +52,51 @@ app.post('/generate-image', async (req, res) => {
       });
     }
 
-    // חכה שהקונטיינר של הקופון יטען
+    // Wait for container and get its dimensions
     await page.waitForSelector('.container');
+    
+    // Get the actual dimensions of the content
+    const dimensions = await page.evaluate(() => {
+      const container = document.querySelector('.container');
+      const rect = container.getBoundingClientRect();
+      return {
+        width: Math.ceil(rect.width),
+        height: Math.ceil(rect.height)
+      };
+    });
 
-    // קבל את המידות המדויקות של הקופון
-    const element = await page.$('.container');
-    const boundingBox = await element.boundingBox();
+    // Reset viewport with actual content dimensions plus padding
+    await page.setViewport({
+      width: dimensions.width + 40, // Add 20px padding on each side
+      height: dimensions.height + 40, // Add 20px padding on each side
+      deviceScaleFactor: 2,
+      isMobile: false,
+    });
 
-    // צילום מסך רק של אזור הקופון
-    const screenshot = await element.screenshot({
+    // Take the screenshot of the entire page
+    const screenshot = await page.screenshot({
       type: 'png',
       omitBackground: true,
-      encoding: 'binary',
-      optimizeForSpeed: false,
-      clip: {
-        x: boundingBox.x,
-        y: boundingBox.y,
-        width: boundingBox.width,
-        height: boundingBox.height
-      }
+      encoding: 'binary'
     });
 
     await browser.close();
 
-    // הגדרת headers לתמונה
     res.set({
       'Content-Type': 'image/png',
       'Content-Disposition': 'inline; filename="coupon.png"',
       'Cache-Control': 'no-cache',
       'X-Content-Type-Options': 'nosniff'
     });
-
+    
     res.end(screenshot, 'binary');
+
   } catch (error) {
     console.error('Error generating image:', error);
     res.status(500).send({
       error: 'Error generating image',
       details: error.message,
+      stack: error.stack
     });
   }
 });
